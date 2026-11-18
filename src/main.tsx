@@ -60,7 +60,7 @@ function App() {
       <div className="header-inner">
         <a className="brand" href="#/">
           <span className="brand-icon"><Icon name="brand" size={24}/></span>
-          <strong>Manchester Route Finder</strong>
+          <strong>Jobuy Routes</strong>
         </a>
         {nav('desktop-nav')}
         <a href="#/deliveries" className="header-upload" aria-current={page === 'deliveries' ? 'page' : undefined}>

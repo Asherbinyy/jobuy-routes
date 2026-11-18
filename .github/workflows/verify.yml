@@ -1,4 +1,4 @@
-name: Verify Manchester Route Finder
+name: Verify Jobuy Routes
 on:
   push:
     branches: [main]

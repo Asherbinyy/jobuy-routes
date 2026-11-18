@@ -1,4 +1,4 @@
-# Run Manchester Route Finder
+# Run Jobuy Routes
 
 Install Node.js 22.13 or newer. From the GitHub checkout, run `npm ci` and `npm run dev`, then open the local address it prints.
 
