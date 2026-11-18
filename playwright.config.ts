@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173)
-const base = process.env.APP_BASE || '/manchester-route-finder/'
+const base = process.env.APP_BASE || '/'
 const url = `http://127.0.0.1:${port}${base}`
 const external = process.env.PLAYWRIGHT_BASE_URL
 

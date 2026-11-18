@@ -17,7 +17,7 @@ async function activate(element: Locator, info: TestInfo) {
   else await element.click()
 }
 async function openData(page: Page) {
-  await page.getByRole('link', { name: 'Data management', exact: true }).first().click()
+  await page.evaluate(() => { location.hash = '#/data' })
   await expect(page.getByRole('heading', { name: 'Import / Update Routes' })).toBeVisible()
 }
 async function applyRoutes(page: Page) {
@@ -191,8 +191,7 @@ async function importTeam(page: Page, kind: 'companies' | 'drivers' | 'coverage'
 }
 
 test('team imports require approval and retired routes flag saved company and driver coverage', async ({ page }) => {
-  await page.goto('./')
-  await nav(page, 'Team').click()
+  await page.goto('./#/team')
   await page.getByRole('button', { name: 'Companies', exact: true }).click()
   await importTeam(page, 'companies', 'Remarks,Carrier\nTest notes,Fixture Company')
   await expect(page.getByText('Fixture Company', { exact: true })).toBeVisible()
@@ -211,15 +210,14 @@ test('team imports require approval and retired routes flag saved company and dr
   await uploadRoutes(page, 12, 'csv')
   await expect(page.getByText('1 active coverage record needs review after this update.')).toBeVisible()
   await applyRoutes(page)
-  await nav(page, 'Team').click()
+  await page.evaluate(() => { location.hash = '#/team' })
   await expect(page.getByText('Route 16 retired', { exact: true })).toBeVisible()
   await expect(page.getByText('Fixture Company · Fixture Driver', { exact: true })).toBeVisible()
 })
 
-test('on-device OCR retains the source, supports correction, approves, exports and restores', async ({ page }, info) => {
+test('on-device OCR retains the source, supports correction, approves, exports and restores', async ({ page }) => {
   test.setTimeout(150000)
-  await page.goto('./')
-  await activate(nav(page, 'Pickups'), info)
+  await page.goto('./#/pickups')
   const requests: string[] = []
   page.on('request', request => { if (/^https?:/.test(request.url())) requests.push(request.url()) })
   const data = await page.evaluate(() => {
@@ -254,7 +252,10 @@ test('on-device OCR retains the source, supports correction, approves, exports a
   await expect(rows.first().getByText(/% OCR confidence/)).toBeVisible()
   await expect(rows.first().getByRole('img', { name: 'Source image labelled-test-pickups.png' })).toBeVisible()
   await rows.nth(1).getByLabel('Full postcode').fill('M1 3XP')
-  for (const row of await rows.all()) await row.getByLabel('Reference and postcode checked against the source').check()
+  for (const row of await rows.all()) {
+    await row.getByLabel('Reference and postcode checked against the source').check()
+    await expect(row.getByText('Needs review', { exact: true })).toHaveCount(0)
+  }
   await expect(rows.nth(1).getByText('Route 3 · M1 3', { exact: true })).toBeVisible()
   await page.reload()
   await expect(rows.nth(1).getByLabel('Full postcode')).toHaveValue('M1 3XP')
@@ -293,10 +294,14 @@ test('core screens fit common mobile widths and pass automated accessibility che
       await noOverflow(page)
     }
   }
-  for (const name of ['Routes', 'Pickups', 'Team']) {
-    await nav(page, name).click()
-    await noOverflow(page)
-  }
+  const mainNav = page.getByRole('navigation', { name: 'Main navigation' })
+  await expect(mainNav.getByRole('link')).toHaveText(['Search', 'Routes'])
+  for (const section of ['Pickups', 'Team', 'Data management']) await expect(page.getByRole('link', { name: section, exact: true })).toHaveCount(0)
+  await nav(page, 'Routes').click()
+  await noOverflow(page)
+  await page.getByRole('link', { name: 'Upload screenshot', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Delivery checklist' })).toBeVisible()
+  await noOverflow(page)
   expect(await violationIds()).toEqual([])
 })
 

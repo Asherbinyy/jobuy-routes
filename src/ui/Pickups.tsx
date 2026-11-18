@@ -32,7 +32,7 @@ function Photo({ source, repository }: { source: PickupSource; repository: Works
     }).catch(() => { if (active) setMissing(true) })
     return () => { active = false; if (imageUrl) URL.revokeObjectURL(imageUrl) }
   }, [repository, source.id])
-  return url ? <a className="photo" href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Source image ${source.name}`}/></a>
+  return url ? <div className="photo"><img src={url} alt={`Source image ${source.name}`}/></div>
     : missing ? <p>Source image unavailable.</p> : null
 }
 

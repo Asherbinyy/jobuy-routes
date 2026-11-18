@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { autocomplete, compare, historyKey, lookup, type Dataset, type Entry, type Lookup, type RouteIndex } from '../domain/routes'
+import { autocomplete, compare, historyKey, lookup, type Entry, type Lookup, type RouteIndex } from '../domain/routes'
 import { readHistory, recordSearch } from '../storage/searchHistory'
 import { Heading, Icon, routeLink, routeNames } from './shared'
-import { RouteCard } from './Routes'
 
 function Result({ result, choose }: { result: Lookup; choose: (value: string) => void }) {
   if (result.type === 'route') return <article className="result panel">
@@ -60,8 +59,8 @@ function SearchHistoryChips({ title, icon, entries, select }: {
   </div>
 }
 
-export function Search({ index, dataset, query, setQuery }: {
-  index: RouteIndex; dataset: Dataset; query: string; setQuery: (value: string) => void
+export function Search({ index, query, setQuery }: {
+  index: RouteIndex; query: string; setQuery: (value: string) => void
 }) {
   const [history, setHistory] = useState(readHistory)
   const [more, setMore] = useState(false)
@@ -117,7 +116,7 @@ export function Search({ index, dataset, query, setQuery }: {
     choose(activeOption ? list[selected].key : query)
   }
 
-  return <>
+  return <div className="search-view">
     <Heading title="Search postcode">Enter a full postcode, sector, district or route number.</Heading>
     <div className="search-layout">
       <section className="search-content" aria-label="Postcode lookup">
@@ -177,26 +176,6 @@ export function Search({ index, dataset, query, setQuery }: {
             <button className="chip" key={district} onClick={() => choose(district)}>{district}</button>)}</div>
         </section>}
       </section>
-      <aside className="search-aside">
-        <section className="dataset-card">
-          <div className="dataset-title"><span className="dataset-icon"><Icon name="data" size={22}/></span><h2>Active route data</h2></div>
-          <div className="dataset-stats">
-            <div><strong>{index.routes.size}</strong><span>Routes</span></div>
-            <div><strong>{index.entries.size}</strong><span>Postcode entries</span></div>
-          </div>
-          <p className="dataset-name" title={dataset.name}>{dataset.name}</p>
-          <a className="dataset-link" href="#/data">Manage data <Icon name="arrow" size={17}/></a>
-        </section>
-        {index.conflicts.length > 0 && <a className="conflict-link" href="#/data/conflicts">
-          <Icon name="alert" size={19}/><span><strong>{index.conflicts.length} postcode {index.conflicts.length === 1 ? 'conflict' : 'conflicts'}</strong>
-            <small>Check the listed routes with dispatch.</small></span><Icon name="chevron" size={17}/>
-        </a>}
-      </aside>
     </div>
-    {isEmpty && <section className="directory-preview">
-      <div className="section-heading"><div><h2>Route directory</h2><p>Browse postcode allocations by route.</p></div>
-        <a className="text-button" href="#/routes">View all routes <Icon name="arrow" size={17}/></a></div>
-      <div className="route-grid preview-grid">{[...index.routes.values()].slice(0, 4).map(route => <RouteCard key={route.id} route={route}/>)}</div>
-    </section>}
-  </>
+  </div>
 }

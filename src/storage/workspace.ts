@@ -1,3 +1,4 @@
+import type { DeliveryState } from '../domain/deliveries'
 import { seed } from '../data/seed'
 import { newDraft, type Approval, type Draft } from '../domain/pickups'
 import { buildIndex, parsePostcode, validRouteId, type Dataset } from '../domain/routes'
@@ -8,7 +9,7 @@ import { uid } from '../domain/util'
 export type TeamChange = { before: Team; after: Team; at: string; label: string; undoOf?: string }
 export type Workspace = {
   schema: 1; revision: number; datasets: Dataset[]; activations: string[]; team: Team
-  teamChanges: TeamChange[]; teamUndo: number[]; draft: Draft; approvals: Approval[]; referencePrefix: string
+  teamChanges: TeamChange[]; teamUndo: number[]; draft: Draft; approvals: Approval[]; referencePrefix: string; deliveries?: DeliveryState
 }
 
 export const initialWorkspace = (): Workspace => ({
