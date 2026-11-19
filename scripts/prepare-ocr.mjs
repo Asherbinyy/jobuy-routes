@@ -9,5 +9,7 @@ const files = {
   'eng.traineddata.gz': '@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz',
   'LICENSE-tesseract.txt': 'tesseract.js/LICENSE.md',
   'LICENSE-tesseract-core.txt': 'tesseract.js-core/LICENSE',
+  'libheif.mjs': 'libheif-js/libheif-wasm/libheif-bundle.mjs',
+  'LICENSE-libheif.txt': 'libheif-js/libheif-wasm/LICENSE',
 }
 await Promise.all(Object.entries(files).map(([name, source]) => copyFile(`node_modules/${source}`, `${target}/${name}`)))

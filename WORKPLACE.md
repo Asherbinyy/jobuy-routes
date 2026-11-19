@@ -17,3 +17,9 @@ An authorised administrator can run the app on a warehouse computer. Browsers op
 5. Run `npm run serve:workplace` and open the configured HTTPS address from staff browsers. Keep the host and its database backup inside the approved network.
 
 Each browser can import a route workbook locally. The shared checklist preserves the route and company confirmed by the person who saved each delivery.
+
+## Printed route and wave references
+
+All 353 rows on the three printed route sheets match the workbook, including repeated rows and the two shared postcode sectors. The reference wave plan lists five companies and 32 routes. Confirm the assignments for the eight routes absent from that sheet. The Warehouse plan under Routes shows the pictured company zones and the stated wave times.
+
+The delivery review uses the printed company assignment when the route still matches the verified postcode list and the selected date has no approved team or workplace override. A shipping label can contain two addresses. Check the postcode and job type before saving a delivery.

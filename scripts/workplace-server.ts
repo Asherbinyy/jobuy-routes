@@ -16,7 +16,7 @@ type Options = {
 const digest = (value: string) => createHash('sha256').update(value).digest()
 const unknownAccount = digest('unknown-account')
 const mime: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.gz': 'application/gzip',
   '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8',
 }

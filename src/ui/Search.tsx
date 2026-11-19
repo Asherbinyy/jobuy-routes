@@ -1,13 +1,24 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { DispatchPlan } from '../domain/dispatch'
 import { autocomplete, compare, historyKey, lookup, type Entry, type Lookup, type RouteIndex } from '../domain/routes'
 import { readHistory, recordSearch } from '../storage/searchHistory'
 import { Heading, Icon, routeLink, routeNames } from './shared'
 
-function Result({ result, choose }: { result: Lookup; choose: (value: string) => void }) {
+function DispatchSummary({ routes, dispatch }: { routes: string[]; dispatch: DispatchPlan }) {
+  return <ul className="search-allocation">{routes.map(id => {
+    const allocation = dispatch.get(id)
+    return <li key={id}>{routes.length > 1 && <span>Route {id} · </span>}{allocation
+      ? <><strong>{allocation.company}</strong><span> · {allocation.wave} · {allocation.times.join(' / ')}</span></>
+      : <span>Company and wave need confirmation</span>}</li>
+  })}</ul>
+}
+
+function Result({ result, choose, dispatch }: { result: Lookup; choose: (value: string) => void; dispatch: DispatchPlan }) {
   if (result.type === 'route') return <article className="result panel">
     <span className="status"><Icon name="check" size={16}/> Route found</span>
     <h2>Route {result.route.id}</h2>
     <p>{result.route.entries.length} postcode entries</p>
+    <DispatchSummary routes={[result.route.id]} dispatch={dispatch}/>
     <a className="button primary" href={routeLink(result.route.id)}>Open route <Icon name="arrow" size={18}/></a>
   </article>
   if (result.type === 'match' || result.type === 'conflict') {
@@ -19,6 +30,7 @@ function Result({ result, choose }: { result: Lookup; choose: (value: string) =>
       <h2>{routeNames(entry.routes)}</h2>
       <p>{entry.kind === 'full' ? 'Full postcode' : 'Sector match'} <strong>{entry.key}</strong>
         {postcode.key !== entry.key && <> · searched {postcode.key}</>}</p>
+      <DispatchSummary routes={entry.routes} dispatch={dispatch}/>
       {result.type === 'conflict' && <p>Check with dispatch.</p>}
       <div className="actions">{entry.routes.map(id => <a key={id} className="button primary" href={routeLink(id)}>
         {entry.routes.length === 1 ? 'Open route' : `Open route ${id}`} <Icon name="arrow" size={18}/>
@@ -59,8 +71,8 @@ function SearchHistoryChips({ title, icon, entries, select }: {
   </div>
 }
 
-export function Search({ index, query, setQuery }: {
-  index: RouteIndex; query: string; setQuery: (value: string) => void
+export function Search({ index, dispatch, query, setQuery }: {
+  index: RouteIndex; dispatch: DispatchPlan; query: string; setQuery: (value: string) => void
 }) {
   const [history, setHistory] = useState(readHistory)
   const [more, setMore] = useState(false)
@@ -169,7 +181,7 @@ export function Search({ index, query, setQuery }: {
           </div>}
           {!isEmpty && result.type === 'partial' && !list.length && <p className="field-hint">Keep typing a postcode, or enter an active route number.</p>}
         </div>
-        <div aria-live="polite"><Result result={result} choose={choose}/></div>
+        <div aria-live="polite"><Result result={result} choose={choose} dispatch={dispatch}/></div>
         {isEmpty && <section className="panel district-panel">
           <div className="section-heading"><h2>Browse by district</h2><Icon name="pin" size={21}/></div>
           <div className="chips">{starterDistricts.map(district =>

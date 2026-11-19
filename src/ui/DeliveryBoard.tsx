@@ -4,7 +4,8 @@ import {
   saveDeliveryUpload, setDeliveryAssigned, type CompanyRule, type DeliveryJob, type DeliveryKind,
   type DeliveryReviewRow, type SavedDeliveryUpload,
 } from '../domain/deliveries'
-import { recognizeImage } from '../domain/ocr'
+import { dispatchCompanies, type DispatchPlan } from '../domain/dispatch'
+import { browserReadablePhoto, recognizeImage } from '../domain/ocr'
 import { compare, type RouteIndex } from '../domain/routes'
 import { csv, download, today, uid } from '../domain/util'
 import type { Commit } from '../storage/useWorkspace'
@@ -55,8 +56,8 @@ function DeliveryGroups({ jobs, pending, change }: {
   )}</div>
 }
 
-export function DeliveryBoard({ index, state, commit, shared }: {
-  index: RouteIndex; state: Workspace; commit: Commit; shared: boolean
+export function DeliveryBoard({ index, dispatch, state, commit, shared }: {
+  index: RouteIndex; dispatch: DispatchPlan; state: Workspace; commit: Commit; shared: boolean
 }) {
   const [date, setDate] = useState(today)
   const [screenshot, setScreenshot] = useState<Screenshot>()
@@ -100,8 +101,10 @@ export function DeliveryBoard({ index, state, commit, shared }: {
   const latest = shared ? remote?.latestUpload : local.latestUpload
   const rules = shared ? remote?.rules ?? noRules : noRules
   const team = shared ? { companies: [], drivers: [], coverage: [] } : state.team
-  const companies = [...new Set([...team.companies.filter(item => item.active).map(item => item.name), ...rules.map(rule => rule.company)])].sort(compare)
-  const review = screenshot?.rows.map(row => ({ row, ...resolveDelivery(row, date, index, team, rules) })) ?? []
+  const companies = [...new Set([
+    ...dispatchCompanies.map(item => item.name), ...team.companies.filter(item => item.active).map(item => item.name), ...rules.map(rule => rule.company),
+  ])].sort(compare)
+  const review = screenshot?.rows.map(row => ({ row, ...resolveDelivery(row, date, index, team, rules, dispatch) })) ?? []
   const included = review.filter(item => item.row.kind === 'delivery')
   const unclear = review.filter(item => item.row.kind === 'unclear').length
   const pickups = review.filter(item => item.row.kind === 'pickup').length
@@ -118,19 +121,23 @@ export function DeliveryBoard({ index, state, commit, shared }: {
     if (screenshot && !confirm('Replace the screenshot and its unsaved review?')) return
     setError('')
     setMessage('')
-    if (!file.size || file.size > 20 * 1024 * 1024 || (file.type && !file.type.startsWith('image/'))
+    if (!file.size || file.size > 20 * 1024 * 1024 || (file.type && !file.type.startsWith('image/') && !/\.hei[cf]$/i.test(file.name))
       || file.type === 'image/svg+xml' || /\.svgz?$/i.test(file.name)) {
       setError('Choose a screenshot image such as PNG or JPEG, up to 20 MB.')
       return
     }
     setReading(true)
-    setProgress('Reading screenshot…')
-    const draft = { id: uid(), name: file.name, url: URL.createObjectURL(file), rows: [] }
+    setProgress('Preparing image…')
+    const draft = { id: uid(), name: file.name, url: '', rows: [] }
     setScreenshot(draft)
     try {
-      const result = await recognizeImage(file, setProgress)
-      const rows = deliveryRows(result.text, state.referencePrefix)
-      setScreenshot({ ...draft, rows, confidence: result.confidence })
+      const photo = await browserReadablePhoto(file, file.name)
+      const preview = { ...draft, url: URL.createObjectURL(photo) }
+      setScreenshot(preview)
+      const result = await recognizeImage(photo, setProgress, text => deliveryRows(text, state.referencePrefix)
+        .every(row => !row.orderRef || (!row.postcode && !row.postcodeChoices?.length)))
+      const rows = deliveryRows(result.text, state.referencePrefix, result.detail)
+      setScreenshot({ ...preview, rows, confidence: result.confidence })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not read the screenshot.')
     } finally {
@@ -202,7 +209,7 @@ export function DeliveryBoard({ index, state, commit, shared }: {
         <div className="section-heading">
           <div><h2>Screenshot</h2>
             <p>{latest ? <>Last upload <time dateTime={latest.uploadedAt}>{atDepot.format(new Date(latest.uploadedAt))}</time> · Delivery date <strong>{formatDate(`${latest.date}T12:00:00Z`)}</strong></> : 'No saved upload yet.'}</p></div>
-          <FilePicker label="Upload screenshot" accept="image/*" disabled={reading || busy} onFiles={files => { void readPhoto(files[0]) }}/>
+          <FilePicker label="Upload screenshot" accept="image/*,.heic,.heif" disabled={reading || busy} onFiles={files => { void readPhoto(files[0]) }}/>
         </div>
         {progress && <p role="status">{progress}</p>}
         {error && <p className="notice warning" role="alert">{error}</p>}
@@ -220,15 +227,15 @@ export function DeliveryBoard({ index, state, commit, shared }: {
           {!reading && <button className="text-button" disabled={busy} onClick={() => {
             if (confirm('Discard the unsaved screenshot review?')) { setScreenshot(undefined); setError('') }
           }}>Discard review</button>}</div>
-        <details className="mapping">
+        {screenshot.url && <details className="mapping">
           <summary><strong>Original screenshot</strong></summary>
           <div className="mapping-body"><div className="photo"><img src={screenshot.url} alt={`Original screenshot ${screenshot.name}`}/></div></div>
-        </details>
+        </details>}
         {!reading && <>
           <p className="stat-line"><strong>{included.length} {included.length === 1 ? 'delivery' : 'deliveries'}</strong>
             <span>{pickups} pickup {pickups === 1 ? 'row' : 'rows'} skipped</span>{unclear > 0 && <span>{unclear} need a type</span>}</p>
           {!review.length && <p>Add a row from the screenshot if the columns were unreadable.</p>}
-          {review.map(({ row, route, routes, company, companies: hints }) => <article key={row.id} className="delivery-edit">
+          {review.map(({ row, route, routes, company, companies: hints, dispatch: allocation }) => <article key={row.id} className="delivery-edit">
             <div className="section-heading"><h3>{row.orderRef || 'Check order reference'}</h3>
               {row.kind === 'pickup' && <span className="tag">Pickup · skipped</span>}
               {row.kind === 'exclude' && <span className="tag">Excluded</span>}</div>
@@ -242,6 +249,14 @@ export function DeliveryBoard({ index, state, commit, shared }: {
                   onChange={event => patchRow(row.id, { orderRef: event.target.value })}/></label>
                 <label>Full postcode<input value={row.postcode} maxLength={20} disabled={busy} autoCapitalize="characters" autoComplete="off" spellCheck={false}
                   onChange={event => patchRow(row.id, { postcode: event.target.value, route: undefined, company: undefined })}/></label>
+                {Boolean(row.postcodeChoices?.length) && <label>Postcodes on label<select disabled={busy}
+                  value={row.postcodeChoices!.includes(row.postcode) ? row.postcode : ''}
+                  onChange={event => patchRow(row.id, { postcode: event.target.value, route: undefined, company: undefined })}>
+                  <option value="">Choose the delivery postcode</option>
+                  {row.postcodeChoices!.map(postcode => <option value={postcode} key={postcode}>
+                    {postcode}{row.postcodeCorrections?.includes(postcode) ? ' · check OCR' : ''}
+                  </option>)}
+                </select></label>}
                 <label>Route<select value={row.route ?? 'auto'} disabled={busy} onChange={event => patchRow(row.id, {
                   route: event.target.value === 'auto' ? undefined : event.target.value, company: undefined,
                 })}>
@@ -258,6 +273,7 @@ export function DeliveryBoard({ index, state, commit, shared }: {
                 </select></label>
               </>}
             </div>
+            {row.kind === 'delivery' && allocation && <p className="field-hint">{allocation.wave} · {allocation.times.join(' / ')}</p>}
             {row.kind === 'delivery' && routes.length > 1 && <p className="field-hint">Postcode conflict · {routeNames(routes)}</p>}
             {row.kind === 'delivery' && hints.length > 1 && <p className="field-hint">Company candidates · {hints.join(', ')}</p>}
             {row.raw && <details className="mapping"><summary>Extracted row</summary><div className="mapping-body"><pre>{row.raw}</pre></div></details>}

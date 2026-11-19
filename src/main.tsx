@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { dispatchForRoutes } from './domain/dispatch'
 import { buildIndex } from './domain/routes'
 import { activeDataset } from './storage/workspace'
 import { useWorkspace } from './storage/useWorkspace'
 import { Routes } from './ui/Routes'
 import { Search } from './ui/Search'
+import { WarehousePlan } from './ui/WarehousePlan'
 import { Icon } from './ui/shared'
 import './styles.css'
 
@@ -33,6 +35,7 @@ function App() {
   const dataset = workspace.state ? activeDataset(workspace.state) : undefined
   // Only route version changes invalidate the derived directory and prefix search index.
   const index = useMemo(() => dataset ? buildIndex(dataset) : undefined, [dataset?.id])
+  const dispatch = useMemo(() => index ? dispatchForRoutes(index) : undefined, [index])
 
   useEffect(() => {
     const handle = () => {
@@ -47,7 +50,7 @@ function App() {
   const { page, id } = location
   const { state, repository, commit } = workspace
   const nav = (className: string) => <nav className={className} aria-label="Main navigation">
-    {destinations.map(item => <a key={item.page} href={item.href} aria-current={page === item.page ? 'page' : undefined}>
+    {destinations.map(item => <a key={item.page} href={item.href} aria-current={page === item.page || (page === 'warehouse' && item.page === 'routes') ? 'page' : undefined}>
       <Icon name={item.page} size={19}/><span>{item.label}</span>
     </a>)}
   </nav>
@@ -73,12 +76,14 @@ function App() {
         <span>{workspace.error}</span><button className="icon-button" aria-label="Dismiss error" onClick={workspace.clearError}><Icon name="clear"/></button>
       </div>}
       {repository && !repository.durable && <p className="notice warning" role="status">Browser storage is unavailable. Changes last until this tab closes or reloads.</p>}
-      {state && repository && dataset && index ? <Suspense fallback={<p role="status">Opening…</p>}>
-        {page === 'routes' ? <Routes index={index} id={id}/> : page === 'data' ? <DataManagement state={state} index={index} commit={commit} page={id}/>
+      {state && repository && dataset && index && dispatch ? <Suspense fallback={<p role="status">Opening…</p>}>
+        {page === 'routes' ? <Routes index={index} dispatch={dispatch} id={id}/>
+          : page === 'warehouse' ? <WarehousePlan index={index} dispatch={dispatch}/>
+          : page === 'data' ? <DataManagement state={state} index={index} commit={commit} page={id}/>
           : page === 'team' ? <Team state={state} index={index} commit={commit}/>
             : page === 'pickups' ? <Pickups state={state} index={index} repository={repository} commit={commit}/>
-              : page === 'deliveries' ? <DeliveryBoard index={index} state={state} commit={commit} shared={shared}/>
-                : <Search index={index} query={query} setQuery={setQuery}/>}
+              : page === 'deliveries' ? <DeliveryBoard index={index} dispatch={dispatch} state={state} commit={commit} shared={shared}/>
+                : <Search index={index} dispatch={dispatch} query={query} setQuery={setQuery}/>}
       </Suspense> : !workspace.error && <p role="status">Opening route data…</p>}
     </main>
     {nav('mobile-nav')}

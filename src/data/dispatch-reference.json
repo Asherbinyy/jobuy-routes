@@ -1,0 +1,32 @@
+{
+  "companies": [
+    { "id": "dragonsea", "name": "Dragonsea", "asPrinted": "DS", "zone": "back", "position": "Back section" },
+    { "id": "forge", "name": "Forge", "asPrinted": "Forge", "zone": "middle-left", "position": "Middle left" },
+    { "id": "crown", "name": "Crown SDS", "asPrinted": "Crown SDS", "zone": "middle-right", "position": "Middle right" },
+    { "id": "warrior", "name": "Warrior", "asPrinted": "Warrior", "zone": "front-left", "position": "Front left" },
+    { "id": "ucls", "name": "UCLS", "asPrinted": "Ucls", "zone": "front-right", "position": "Front right" }
+  ],
+  "waves": [
+    {
+      "label": "Wave 1", "times": ["07:00", "07:45"],
+      "groups": [
+        { "company": "crown", "routes": ["22", "37"] },
+        { "company": "ucls", "routes": ["32", "30", "33"] },
+        { "company": "warrior", "routes": ["26", "39", "21", "38"] }
+      ]
+    },
+    {
+      "label": "Wave 2", "times": ["07:45", "08:30"],
+      "groups": [
+        { "company": "forge", "routes": ["20", "27", "28", "31", "18", "40", "17", "29", "19"] },
+        { "company": "dragonsea", "routes": ["36", "35", "13", "12", "1", "2"] }
+      ]
+    },
+    {
+      "label": "Wave 3", "times": ["08:30", "09:15"],
+      "groups": [
+        { "company": "dragonsea", "routes": ["3", "4", "5", "6", "7", "8", "9", "10"] }
+      ]
+    }
+  ]
+}

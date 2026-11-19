@@ -1,4 +1,5 @@
 import { parsePickupText } from './pickups'
+import type { DispatchPlan } from './dispatch'
 import { compare, lookup, parsePostcode, routeId, validRouteId, type RouteIndex } from './routes'
 import { spreadsheetDate } from './spreadsheets'
 import { type Team } from './team'
@@ -7,6 +8,7 @@ import { uid } from './util'
 export type DeliveryKind = 'delivery' | 'pickup' | 'unclear' | 'exclude'
 export type DeliveryReviewRow = {
   id: string; orderRef: string; postcode: string; kind: DeliveryKind; raw: string; route?: string; company?: string
+  postcodeChoices?: string[]; postcodeCorrections?: string[]
 }
 export type CompanyRule = { route: string; company: string; date?: string }
 export type DeliveryInput = { id: string; orderRef: string; postcode: string; route: string; company: string }
@@ -16,20 +18,71 @@ export type SavedDeliveryUpload = { id: string; date: string; uploadedAt: string
 export type DeliveryState = { jobs: DeliveryJob[]; uploads: SavedDeliveryUpload[] }
 export const emptyDeliveries: DeliveryState = { jobs: [], uploads: [] }
 const isId = (value: string) => /^[a-f0-9]{32}$|^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value)
+const deliveryPattern = /\bdeliver(?:y|ies)\b/i
+const pickupPattern = /\b(?:pick[-\s]*ups?|collection)\b/i
 
-export function deliveryRows(text: string, prefix: string): DeliveryReviewRow[] {
-  return text.split(/\r?\n/).flatMap(line => {
+function readWaybill(text: string, prefix: string, corrections: string[]): DeliveryReviewRow | undefined {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  const mainWaybill = /\bmain\s+(?:w\s*\.?\s*b|waybill)\b/i
+  const subWaybill = /\bsub\s+(?:w\s*\.?\s*b|waybill)\b/i
+  const markers = lines.flatMap((line, index) => mainWaybill.test(line) ? [index] : [])
+  if (!markers.length) return
+  const references = new Set(markers.flatMap(index => {
+    const text = subWaybill.test(lines[index + 1] ?? '') ? lines[index] : `${lines[index]}\n${lines[index + 1] ?? ''}`
+    return parsePickupText(text, '', prefix).map(row => row.orderRef).filter(Boolean)
+  }))
+  if (references.size > 1) return
+  const postcodeChoices = labelPostcodes(text, prefix, corrections)
+  const typeLines = lines.filter(line => /\b(?:job type|shipment type)\b|^type\s*[:=]/i.test(line)
+    || /^(?:pick[-\s]*up|collection|delivery)(?:\s+(?:example|label))?$/i.test(line))
+  const delivery = typeLines.some(line => deliveryPattern.test(line))
+  const pickup = typeLines.some(line => pickupPattern.test(line))
+  return {
+    id: uid(), orderRef: [...references][0] ?? '', postcode: '',
+    kind: delivery === pickup ? 'unclear' : delivery ? 'delivery' : 'pickup', postcodeChoices, postcodeCorrections: corrections,
+    raw: [...markers.map(index => lines[index]), ...typeLines, ...postcodeChoices].join('\n'),
+  }
+}
+
+function labelPostcodes(text: string, prefix: string, corrections: string[]) {
+  return [...new Set([...parsePickupText(text, '', prefix).map(row => row.postcode).filter(Boolean), ...corrections])]
+}
+
+const digitLookalikes: Record<string, string> = { O: '0', I: '1', L: '1', Z: '2', S: '5', G: '6', B: '8' }
+
+function labelCorrections(text: string) {
+  return [...text.toUpperCase().matchAll(/\b([A-Z]{1,2}\d[A-Z\d]?)\s+([OILZSGB])\s*([A-Z]{2})\b/g)].flatMap(match => {
+    const candidate = parsePostcode(`${match[1]} ${digitLookalikes[match[2]]}${match[3]}`)
+    return candidate?.kind === 'full' ? [candidate.key] : []
+  })
+}
+
+export function deliveryRows(text: string, prefix: string, detail: string[] = []): DeliveryReviewRow[] {
+  const allText = [text, ...detail].join('\n')
+  const corrections = labelCorrections(detail.join('\n'))
+  const waybill = readWaybill(allText, prefix, corrections)
+  if (waybill) return [waybill]
+  const rows = text.split(/\r?\n/).flatMap(line => {
     const jobs = parsePickupText(line, '', prefix).filter(job => job.orderRef || job.postcode)
-    const delivery = /\bdeliver(?:y|ies)\b/i.test(line)
-    const pickup = /\bpick[-\s]*ups?\b/i.test(line)
-    const kind = jobs.length === 1 && delivery !== pickup ? (delivery ? 'delivery' : 'pickup') : 'unclear'
+    const delivery = deliveryPattern.test(line)
+    const pickup = pickupPattern.test(line)
+    const kind: DeliveryKind = jobs.length === 1 && delivery !== pickup ? (delivery ? 'delivery' : 'pickup') : 'unclear'
     return jobs.map(({ id, orderRef, postcode }) => ({ id, orderRef, postcode, kind, raw: line.trim() }))
   })
+  if (!detail.length || rows.some(row => row.orderRef && row.postcode)) return rows
+  const references = [...new Set(parsePickupText(allText, '', prefix).map(row => row.orderRef).filter(Boolean))]
+  const postcodeChoices = labelPostcodes(allText, prefix, corrections)
+  if (!postcodeChoices.length || (references.length !== 1 && rows.length > 1)) return rows
+  const orderRef = references.length === 1 ? references[0].toUpperCase() : ''
+  return [{
+    id: uid(), orderRef, postcode: '', kind: 'unclear', postcodeChoices, postcodeCorrections: corrections,
+    raw: [...references, ...postcodeChoices].join('\n'),
+  }]
 }
 
 export const blankDeliveryRow = (): DeliveryReviewRow => ({ id: uid(), orderRef: '', postcode: '', kind: 'unclear', raw: '' })
 
-export function resolveDelivery(row: DeliveryReviewRow, date: string, index: RouteIndex, team: Team, rules: CompanyRule[]) {
+export function resolveDelivery(row: DeliveryReviewRow, date: string, index: RouteIndex, team: Team, rules: CompanyRule[], dispatch?: DispatchPlan) {
   const postcode = parsePostcode(row.postcode)
   const matched = postcode?.kind === 'full' ? lookup(index, postcode.key, true) : null
   const routes = matched?.type === 'match' || matched?.type === 'conflict' ? matched.entry.routes : []
@@ -43,8 +96,10 @@ export function resolveDelivery(row: DeliveryReviewRow, date: string, index: Rou
   const matches = route ? [...localRules, ...rules.filter(rule => rule.route === route && (!rule.date || rule.date === date))] : []
   const hints = matches.some(item => item.date === date) ? matches.filter(item => item.date === date) : matches
   const companies = [...new Set(hints.map(item => item.company))].sort(compare)
-  const company = route ? row.company ?? (companies.length === 1 ? companies[0] : '') : ''
-  return { postcode, route, routes, companies, company }
+  const reference = dispatch?.get(route)
+  const suggested = companies.length === 1 ? companies[0] : companies.length === 0 ? reference?.company ?? '' : ''
+  const company = route ? row.company ?? suggested : ''
+  return { postcode, route, routes, companies, company, dispatch: company && reference?.company === company ? reference : undefined }
 }
 
 export function readDeliveryUpload(value: unknown): DeliveryUpload {
